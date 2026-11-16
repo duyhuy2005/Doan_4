@@ -10,11 +10,11 @@ export default function Footer() {
           {/* Cột 1: Thông tin thương hiệu */}
           <div className="lg:col-span-2 space-y-4">
             <Link to="/" className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
+              <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
                 <Car className="w-6 h-6" />
               </div>
               <span className="text-2xl font-extrabold text-white tracking-tight">
-                Auto<span className="text-blue-400">Rental</span>
+                Auto<span className="text-emerald-400">Rental</span>
               </span>
             </Link>
             <p className="text-sm text-slate-400 leading-relaxed max-w-sm">

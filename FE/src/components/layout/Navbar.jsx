@@ -24,10 +24,10 @@ export default function Navbar() {
 
   const navLinks = [
     { name: 'Trang chủ', path: '/' },
-    { name: 'Tìm & Thuê xe', path: '/cars' },
+    { name: 'Tìm xe', path: '/find/filter' },
+    { name: 'Khuyến mãi', path: '/#promotions' },
     { name: 'Lịch sử thuê', path: '/history' },
     { name: 'Đánh giá', path: '/reviews' },
-    { name: 'Khuyến mãi', path: '/#promotions' },
   ];
 
   const handleRoleSwitch = (role) => {
@@ -108,12 +108,12 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-16">
           {/* Logo Brand */}
           <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 flex items-center justify-center text-white shadow-md shadow-slate-900/20 group-hover:scale-105 transition-transform">
-              <Car className="w-6 h-6 text-blue-400" />
+            <div className="w-10 h-10 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-md shadow-emerald-600/25 group-hover:scale-105 transition-transform">
+              <Car className="w-6 h-6 text-white" />
             </div>
             <div>
               <span className="text-xl font-extrabold tracking-tight text-slate-900">
-                Auto<span className="text-blue-600">Rental</span>
+                Auto<span className="text-emerald-600">Rental</span>
               </span>
               <span className="hidden sm:block text-[10px] text-slate-500 font-medium tracking-wide uppercase">
                 Thuê xe tự lái uy tín
@@ -131,7 +131,7 @@ export default function Navbar() {
                   to={link.path}
                   className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
                     isActive
-                      ? 'text-blue-600 bg-blue-50/80 font-semibold'
+                      ? 'text-emerald-700 bg-emerald-50/90 font-bold'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70'
                   }`}
                 >
