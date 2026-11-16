@@ -24,12 +24,11 @@ import {
   Check,
   Search,
   List,
+  Baby,
+  Navigation,
   Fuel,
   Users,
 } from 'lucide-react';
-
-// Danh sách xe mẫu chuẩn 100% theo giao diện Mioto trong ảnh thực tế
-const MIOTO_FEATURED_CARS = MIOTO_STATIC_CARS;
 
 const POPULAR_LOCATIONS = [
   'TP. Hồ Chí Minh',
@@ -45,6 +44,8 @@ const POPULAR_LOCATIONS = [
   'Bình Dương',
   'Bà Rịa - Vũng Tàu',
   'Đà Lạt',
+  'Cần Thơ',
+  'Nha Trang',
 ];
 
 const CAR_TYPES = [
@@ -57,26 +58,58 @@ const CAR_TYPES = [
 
 const BRANDS = [
   { label: 'Tất cả hãng xe', value: 'ALL' },
-  { label: 'Honda', value: 'Honda' },
-  { label: 'Geely', value: 'Geely' },
+  { label: 'Kia', value: 'Kia' },
   { label: 'Hyundai', value: 'Hyundai' },
   { label: 'Toyota', value: 'Toyota' },
-  { label: 'Kia', value: 'Kia' },
+  { label: 'Honda', value: 'Honda' },
   { label: 'VinFast', value: 'VinFast' },
+  { label: 'Geely', value: 'Geely' },
+  { label: 'Suzuki', value: 'Suzuki' },
+  { label: 'MG', value: 'MG' },
   { label: 'Mazda', value: 'Mazda' },
   { label: 'Ford', value: 'Ford' },
   { label: 'Mitsubishi', value: 'Mitsubishi' },
 ];
+
+// Helper format datetime giống hiển thị chuẩn của Mioto: `21:00 T2, 16/11 - 20:00 T3, 17/11`
+function formatMiotoDateRange(startMs, endMs) {
+  try {
+    const s = new Date(Number(startMs));
+    const e = new Date(Number(endMs));
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) {
+      return '21:00 T2, 16/11 - 20:00 T3, 17/11';
+    }
+    const dayNames = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    const sHours = String(s.getHours()).padStart(2, '0');
+    const sMins = String(s.getMinutes()).padStart(2, '0');
+    const sDay = dayNames[s.getDay()];
+    const sDate = `${s.getDate()}/${s.getMonth() + 1}`;
+
+    const eHours = String(e.getHours()).padStart(2, '0');
+    const eMins = String(e.getMinutes()).padStart(2, '0');
+    const eDay = dayNames[e.getDay()];
+    const eDate = `${e.getDate()}/${e.getMonth() + 1}`;
+
+    return `${sHours}:${sMins} ${sDay}, ${sDate} - ${eHours}:${eMins} ${eDay}, ${eDate}`;
+  } catch {
+    return '21:00 T2, 16/11 - 20:00 T3, 17/11';
+  }
+}
 
 export default function CarListPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const filterScrollRef = useRef(null);
 
-  // Params tương thích link Mioto
+  // Parse params từ link chuẩn của Mioto
   const addressParam = searchParams.get('address') || 'TP. Hồ Chí Minh';
+  const startMsParam = Number(searchParams.get('startDate')) || 1794837600000;
+  const endMsParam = Number(searchParams.get('endDate')) || 1794920400000;
+
   const [address, setAddress] = useState(addressParam);
-  const [dateDisplay, setDateDisplay] = useState('21:00 T4, 11/11 - 20:00 T5, 12/11');
+  const [dateDisplay, setDateDisplay] = useState(formatMiotoDateRange(startMsParam, endMsParam));
+  const [startMs, setStartMs] = useState(startMsParam);
+  const [endMs, setEndMs] = useState(endMsParam);
 
   // Active filter state cho các pill bấm kiểu Mioto
   const [activePills, setActivePills] = useState({
@@ -86,10 +119,13 @@ export default function CarListPage() {
     quickBook: false,
     noCollateral: false,
     discount: false,
+    childSeat: false,
+    extendedTravel: false,
   });
 
   const [selectedType, setSelectedType] = useState('ALL');
   const [selectedBrand, setSelectedBrand] = useState('ALL');
+  const [sortBy, setSortBy] = useState('DEFAULT'); // DEFAULT | PRICE_ASC | PRICE_DESC | TRIPS_DESC
 
   // Dropdown states
   const [isTypeDropdownOpen, setIsTypeDropdownOpen] = useState(false);
@@ -106,23 +142,40 @@ export default function CarListPage() {
   const [allCars, setAllCars] = useState([]);
   const [displayedCars, setDisplayedCars] = useState([]);
 
-  // Tải danh sách xe từ storage + nạp 4 mẫu chuẩn Mioto vào đầu
+  // Tải danh sách xe từ storage + kết hợp danh sách xe chuẩn Mioto
   useEffect(() => {
     const dbCars = storageService.getCars();
-    // Gộp 4 xe mẫu chuẩn Mioto lên đầu để trùng khớp 100% với screenshot
+    // Ưu tiên nạp danh sách xe mẫu Mioto lên đầu để hiển thị y hệt link tham chiếu
     const merged = [
-      ...MIOTO_FEATURED_CARS,
-      ...dbCars.filter((c) => !MIOTO_FEATURED_CARS.some((m) => m.name.toLowerCase() === (c.name || '').toLowerCase())),
+      ...MIOTO_STATIC_CARS,
+      ...dbCars.filter((c) => !MIOTO_STATIC_CARS.some((m) => m.name.toLowerCase() === (c.name || '').toLowerCase())),
     ];
     setAllCars(merged);
     setDisplayedCars(merged);
   }, []);
 
+  // Cập nhật dateDisplay khi searchParams thay đổi
+  useEffect(() => {
+    const s = Number(searchParams.get('startDate')) || startMsParam;
+    const e = Number(searchParams.get('endDate')) || endMsParam;
+    const addr = searchParams.get('address') || 'TP. Hồ Chí Minh';
+    setAddress(addr);
+    setStartMs(s);
+    setEndMs(e);
+    setDateDisplay(formatMiotoDateRange(s, e));
+  }, [searchParams]);
+
   // Xử lý áp dụng bộ lọc đồng bộ
-  const applyFilters = (pillOverrides = {}, typeOverride = null, brandOverride = null) => {
+  const applyFilters = (
+    pillOverrides = {},
+    typeOverride = null,
+    brandOverride = null,
+    sortOverride = null
+  ) => {
     const pills = { ...activePills, ...pillOverrides };
     const curType = typeOverride !== null ? typeOverride : selectedType;
     const curBrand = brandOverride !== null ? brandOverride : selectedBrand;
+    const curSort = sortOverride !== null ? sortOverride : sortBy;
 
     let filtered = [...allCars];
 
@@ -130,11 +183,18 @@ export default function CarListPage() {
       if (curType === '4_SEATS') filtered = filtered.filter((c) => c.seats <= 4);
       else if (curType === '5_SEATS') filtered = filtered.filter((c) => c.seats === 5);
       else if (curType === '7_SEATS') filtered = filtered.filter((c) => c.seats >= 7);
-      else if (curType === 'PICKUP') filtered = filtered.filter((c) => (c.categoryName || '').toLowerCase().includes('bán tải') || (c.categoryName || '').toLowerCase().includes('pickup'));
+      else if (curType === 'PICKUP')
+        filtered = filtered.filter(
+          (c) =>
+            (c.categoryName || '').toLowerCase().includes('bán tải') ||
+            (c.categoryName || '').toLowerCase().includes('pickup')
+        );
     }
 
     if (curBrand !== 'ALL') {
-      filtered = filtered.filter((c) => (c.brandName || '').toLowerCase() === curBrand.toLowerCase());
+      filtered = filtered.filter(
+        (c) => (c.brandName || '').toLowerCase() === curBrand.toLowerCase()
+      );
     }
 
     if (pills.hourlyPrice) {
@@ -151,6 +211,18 @@ export default function CarListPage() {
     }
     if (pills.discount) {
       filtered = filtered.filter((c) => (c.discountPercent || 0) >= 15);
+    }
+    if (pills.childSeat) {
+      filtered = filtered.filter((c) => c.features?.includes('Ghế trẻ em') || c.seats >= 5);
+    }
+
+    // Sắp xếp
+    if (curSort === 'PRICE_ASC') {
+      filtered.sort((a, b) => (a.dailyPrice || 0) - (b.dailyPrice || 0));
+    } else if (curSort === 'PRICE_DESC') {
+      filtered.sort((a, b) => (b.dailyPrice || 0) - (a.dailyPrice || 0));
+    } else if (curSort === 'TRIPS_DESC') {
+      filtered.sort((a, b) => (b.tripCount || 0) - (a.tripCount || 0));
     }
 
     setDisplayedCars(filtered);
@@ -183,15 +255,39 @@ export default function CarListPage() {
       quickBook: false,
       noCollateral: false,
       discount: false,
+      childSeat: false,
+      extendedTravel: false,
     });
     setSelectedType('ALL');
     setSelectedBrand('ALL');
+    setSortBy('DEFAULT');
     setDisplayedCars(allCars);
   };
 
   const handleSelectLocation = (loc) => {
     setAddress(loc);
     setIsLocationModalOpen(false);
+    setSearchParams({
+      startDate: startMs,
+      endDate: endMs,
+      address: loc,
+      lat: 10.8,
+      lng: 106.7,
+    });
+  };
+
+  const handleApplyDates = (newStartMs, newEndMs) => {
+    setStartMs(newStartMs);
+    setEndMs(newEndMs);
+    setDateDisplay(formatMiotoDateRange(newStartMs, newEndMs));
+    setIsDateModalOpen(false);
+    setSearchParams({
+      startDate: newStartMs,
+      endDate: newEndMs,
+      address,
+      lat: 10.8,
+      lng: 106.7,
+    });
   };
 
   const scrollPillsRight = () => {
@@ -201,19 +297,19 @@ export default function CarListPage() {
   };
 
   return (
-    <div className="bg-[#f9fafb] min-h-screen">
+    <div className="bg-[#f9fafb] min-h-screen pb-20">
       {/* ============================================================== */}
       {/* 1. TOP SUBHEADER BAR: NÚT BACK + CAPSULE ĐỊA ĐIỂM + CAPSULE THỜI GIAN */}
       {/* ============================================================== */}
       <div className="bg-white border-b border-slate-200 sticky top-16 z-30 shadow-2xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between gap-3">
           {/* Nút quay lại tròn `<` + 2 Capsule */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <button
               type="button"
               onClick={() => navigate('/')}
               className="w-8 h-8 rounded-full border border-slate-300 hover:border-slate-400 bg-white flex items-center justify-center text-slate-700 transition-colors cursor-pointer shrink-0"
-              title="Quay lại"
+              title="Về trang chủ"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -228,15 +324,20 @@ export default function CarListPage() {
               <span className="truncate max-w-[140px] sm:max-w-[200px]">{address}</span>
             </button>
 
-            {/* Capsule Thời gian: `📅 21:00 T4, 11/11 - 20:00 T5, 12/11` */}
+            {/* Capsule Thời gian: `📅 21:00 T2, 16/11 - 20:00 T3, 17/11` */}
             <button
               type="button"
               onClick={() => setIsDateModalOpen(true)}
               className="px-3.5 py-1.5 rounded-full border border-slate-300 hover:border-emerald-600 bg-white text-xs font-bold text-slate-800 flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
             >
               <Calendar className="w-3.5 h-3.5 text-slate-700" />
-              <span className="truncate max-w-[180px] sm:max-w-none">{dateDisplay}</span>
+              <span className="truncate max-w-[200px] sm:max-w-none">{dateDisplay}</span>
             </button>
+          </div>
+
+          {/* Tổng số xe tìm thấy */}
+          <div className="hidden sm:block text-xs font-bold text-slate-500">
+            Tìm thấy <span className="text-emerald-700 font-extrabold">{displayedCars.length}</span> xe phù hợp
           </div>
         </div>
 
@@ -274,7 +375,11 @@ export default function CarListPage() {
                 }`}
               >
                 <CarIcon className="w-3.5 h-3.5" />
-                <span>{selectedType === 'ALL' ? 'Loại xe' : CAR_TYPES.find((t) => t.value === selectedType)?.label}</span>
+                <span>
+                  {selectedType === 'ALL'
+                    ? 'Loại xe'
+                    : CAR_TYPES.find((t) => t.value === selectedType)?.label}
+                </span>
                 <ChevronDown className="w-3 h-3 text-slate-400" />
               </button>
 
@@ -285,7 +390,9 @@ export default function CarListPage() {
                       key={t.value}
                       onClick={() => handleSelectType(t.value)}
                       className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-emerald-50 cursor-pointer ${
-                        selectedType === t.value ? 'font-bold text-emerald-700 bg-emerald-50/60' : 'text-slate-700'
+                        selectedType === t.value
+                          ? 'font-bold text-emerald-700 bg-emerald-50/60'
+                          : 'text-slate-700'
                       }`}
                     >
                       <span>{t.label}</span>
@@ -322,7 +429,9 @@ export default function CarListPage() {
                       key={b.value}
                       onClick={() => handleSelectBrand(b.value)}
                       className={`w-full text-left px-3 py-2 flex items-center justify-between hover:bg-emerald-50 cursor-pointer ${
-                        selectedBrand === b.value ? 'font-bold text-emerald-700 bg-emerald-50/60' : 'text-slate-700'
+                        selectedBrand === b.value
+                          ? 'font-bold text-emerald-700 bg-emerald-50/60'
+                          : 'text-slate-700'
                       }`}
                     >
                       <span>{b.label}</span>
@@ -422,6 +531,20 @@ export default function CarListPage() {
               <span>Giảm giá</span>
               <span className="w-3.5 h-3.5 rounded-full border border-slate-300 text-[9px] inline-flex items-center justify-center font-normal ml-0.5">?</span>
             </button>
+
+            {/* Pill: Ghế trẻ em */}
+            <button
+              type="button"
+              onClick={() => togglePill('childSeat')}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border flex items-center gap-1.5 shrink-0 transition-all cursor-pointer ${
+                activePills.childSeat
+                  ? 'bg-emerald-600 text-white border-emerald-600'
+                  : 'bg-white text-slate-700 border-slate-300 hover:border-slate-400'
+              }`}
+            >
+              <Baby className="w-3.5 h-3.5" />
+              <span>Ghế trẻ em</span>
+            </button>
           </div>
 
           {/* Cụm nút cuộn phải `>` và `Bộ lọc` */}
@@ -483,7 +606,9 @@ export default function CarListPage() {
                   <div
                     key={car.id}
                     onMouseEnter={() => setSelectedMapCar(car)}
-                    className={`transition-all ${selectedMapCar?.id === car.id ? 'ring-2 ring-emerald-500 rounded-2xl' : ''}`}
+                    className={`transition-all ${
+                      selectedMapCar?.id === car.id ? 'ring-2 ring-emerald-500 rounded-2xl' : ''
+                    }`}
                   >
                     <MiotoCarCard car={car} />
                   </div>
@@ -515,45 +640,31 @@ export default function CarListPage() {
 
               {/* Các điểm Ghim Giá Xe trên bản đồ */}
               <div className="relative z-10 w-full h-full">
-                {/* Pin 1: Honda City RS 609K */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedMapCar(displayedCars[0] || null)}
-                  className="absolute top-[28%] left-[34%] -translate-x-1/2 -translate-y-1/2 bg-white hover:bg-emerald-600 hover:text-white text-slate-900 font-black px-3 py-1.5 rounded-full shadow-xl border-2 border-emerald-600 text-xs cursor-pointer transition-all hover:scale-110 flex items-center gap-1 active:scale-95"
-                >
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span>609K</span>
-                </button>
+                {displayedCars.slice(0, 6).map((car, idx) => {
+                  const positions = [
+                    { top: '28%', left: '34%' },
+                    { top: '42%', left: '48%' },
+                    { top: '60%', left: '62%' },
+                    { top: '35%', left: '68%' },
+                    { top: '55%', left: '30%' },
+                    { top: '70%', left: '45%' },
+                  ];
+                  const pos = positions[idx] || { top: '50%', left: '50%' };
+                  const kPrice = Math.round((car.dailyPrice || 609000) / 1000);
 
-                {/* Pin 2: Geely Coolray 790K */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedMapCar(displayedCars[1] || null)}
-                  className="absolute top-[42%] left-[48%] -translate-x-1/2 -translate-y-1/2 bg-white hover:bg-emerald-600 hover:text-white text-slate-900 font-black px-3 py-1.5 rounded-full shadow-xl border-2 border-emerald-600 text-xs cursor-pointer transition-all hover:scale-110 flex items-center gap-1 active:scale-95"
-                >
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span>790K</span>
-                </button>
-
-                {/* Pin 3: Hyundai SantaFe 983K */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedMapCar(displayedCars[2] || null)}
-                  className="absolute top-[60%] left-[62%] -translate-x-1/2 -translate-y-1/2 bg-white hover:bg-emerald-600 hover:text-white text-slate-900 font-black px-3 py-1.5 rounded-full shadow-xl border-2 border-emerald-600 text-xs cursor-pointer transition-all hover:scale-110 flex items-center gap-1 active:scale-95"
-                >
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span>983K</span>
-                </button>
-
-                {/* Pin 4: Hyundai Elantra 800K */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedMapCar(displayedCars[3] || null)}
-                  className="absolute top-[35%] left-[68%] -translate-x-1/2 -translate-y-1/2 bg-white hover:bg-emerald-600 hover:text-white text-slate-900 font-black px-3 py-1.5 rounded-full shadow-xl border-2 border-emerald-600 text-xs cursor-pointer transition-all hover:scale-110 flex items-center gap-1 active:scale-95"
-                >
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span>800K</span>
-                </button>
+                  return (
+                    <button
+                      key={car.id}
+                      type="button"
+                      onClick={() => setSelectedMapCar(car)}
+                      style={{ top: pos.top, left: pos.left }}
+                      className="absolute -translate-x-1/2 -translate-y-1/2 bg-white hover:bg-emerald-600 hover:text-white text-slate-900 font-black px-3 py-1.5 rounded-full shadow-xl border-2 border-emerald-600 text-xs cursor-pointer transition-all hover:scale-110 flex items-center gap-1 active:scale-95"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                      <span>{kPrice}K</span>
+                    </button>
+                  );
+                })}
 
                 {/* Popup xem nhanh xe được click trên bản đồ */}
                 {selectedMapCar && (
@@ -672,34 +783,45 @@ export default function CarListPage() {
         title="Thời gian thuê xe"
       >
         <div className="space-y-4 text-xs sm:text-sm">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Bắt đầu nhận xe</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Bắt đầu nhận xe
+              </label>
               <input
                 type="datetime-local"
-                defaultValue="2026-11-11T21:00"
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-mono font-medium"
+                value={new Date(startMs).toISOString().slice(0, 16)}
+                onChange={(e) => setStartMs(new Date(e.target.value).getTime())}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-mono font-medium text-xs"
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Kết thúc trả xe</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Kết thúc trả xe
+              </label>
               <input
                 type="datetime-local"
-                defaultValue="2026-11-12T20:00"
-                className="w-full p-2.5 rounded-xl border border-slate-300 font-mono font-medium"
+                value={new Date(endMs).toISOString().slice(0, 16)}
+                onChange={(e) => setEndMs(new Date(e.target.value).getTime())}
+                className="w-full p-2.5 rounded-xl border border-slate-300 font-mono font-medium text-xs"
               />
             </div>
           </div>
 
           <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800">
-            ✓ Tổng thời gian thuê: <strong>23 giờ (1 ngày)</strong>.
+            ✓ Tổng thời gian thuê:{' '}
+            <strong>
+              {Math.max(1, Math.round((endMs - startMs) / (1000 * 60 * 60)))} giờ (
+              {Math.max(1, Math.ceil((endMs - startMs) / (1000 * 60 * 60 * 24)))} ngày)
+            </strong>
+            .
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
-              onClick={() => setIsDateModalOpen(false)}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer transition-colors text-xs"
+              onClick={() => handleApplyDates(startMs, endMs)}
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer transition-colors text-xs"
             >
               Áp dụng thời gian
             </button>
@@ -715,7 +837,37 @@ export default function CarListPage() {
         onClose={() => setIsFilterDrawerOpen(false)}
         title="Bộ lọc nâng cao"
       >
-        <div className="space-y-5 text-xs sm:text-sm">
+        <div className="space-y-5 text-xs sm:text-sm max-h-[75vh] overflow-y-auto pr-1">
+          {/* Sắp xếp theo */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-2">Sắp xếp theo</label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: 'Mặc định (Khuyên dùng)', value: 'DEFAULT' },
+                { label: 'Giá thấp đến cao', value: 'PRICE_ASC' },
+                { label: 'Giá cao đến thấp', value: 'PRICE_DESC' },
+                { label: 'Nhiều chuyến đi nhất', value: 'TRIPS_DESC' },
+              ].map((s) => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => {
+                    setSortBy(s.value);
+                    applyFilters({}, null, null, s.value);
+                  }}
+                  className={`p-2.5 rounded-xl border text-xs font-medium cursor-pointer transition-all text-left flex items-center justify-between ${
+                    sortBy === s.value
+                      ? 'bg-emerald-50 border-emerald-500 text-emerald-800 font-bold'
+                      : 'border-slate-300 hover:border-slate-400 bg-white text-slate-700'
+                  }`}
+                >
+                  <span>{s.label}</span>
+                  {sortBy === s.value && <Check className="w-3.5 h-3.5 text-emerald-600" />}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Loại xe */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-2">Loại xe</label>
@@ -740,7 +892,7 @@ export default function CarListPage() {
           {/* Hãng xe */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-2">Hãng xe</label>
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {BRANDS.map((b) => (
                 <button
                   key={b.value}
@@ -771,7 +923,7 @@ export default function CarListPage() {
             <button
               type="button"
               onClick={() => setIsFilterDrawerOpen(false)}
-              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer text-xs"
+              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer text-xs shadow-md shadow-emerald-600/20"
             >
               Xem {displayedCars.length} xe
             </button>
